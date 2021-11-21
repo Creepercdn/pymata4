@@ -24,6 +24,9 @@ import serial
 from serial.tools import list_ports
 # noinspection PyPackageRequirementscd
 from serial.serialutil import SerialException
+
+import bluetooth
+
 import socket
 import sys
 import threading
@@ -48,7 +51,7 @@ class Pymata4(threading.Thread):
                  arduino_instance_id=1, arduino_wait=4,
                  sleep_tune=0.000001,
                  shutdown_on_exception=True, ip_address=None,
-                 ip_port=None):
+                 ip_port=None, bt_sock=None):
         """
         If you are using the Firmata Express Arduino sketch,
         and have a single Arduino connected to your computer,
@@ -82,6 +85,8 @@ class Pymata4(threading.Thread):
         :param ip_port: Used with StandardFirmataWifi to specify IP port of
                            the WiFi device. Typically this is 3030
 
+        :param bt_sock: Used with replace TCP/IP sock to BluetoothSocket
+
         """
         self.start_time = time.time()
         # initialize threading parent
@@ -96,6 +101,15 @@ class Pymata4(threading.Thread):
 
         self.ip_address = ip_address
         self.ip_port = ip_port
+
+        self.sock = bt_sock
+
+        self.isBT = False
+
+        if bt_sock:
+            self.isBT = True
+            self.ip_address = "InternalBluetoothAddress"
+            print(f"Successfully bridged Bluetooth: {self.sock.getsockname()}")
 
         # if an ip address was specified, tcp/ip will be used instead of serial
         # transfer.
@@ -200,9 +214,6 @@ class Pymata4(threading.Thread):
         # serial port in use
         self.serial_port = None
 
-        # handle to tcp/ip socket
-        self.sock = None
-
         # An i2c_map entry consists of a device i2c address as the key, and
         #  the value of the key consists of a dictionary containing 2 entries.
         #  The first entry. 'value' contains the last value reported, and
@@ -227,6 +238,8 @@ class Pymata4(threading.Thread):
 
         print(f"pymata4:  Version {PrivateConstants.PYMATA_EXPRESS_THREADED_VERSION}\n\n"
               f"Copyright (c) 2020 Alan Yorinks All Rights Reserved.\n")
+
+        
         # if this is not a tcp interface, find the serial port
         if not self.ip_address:
             if not self.com_port:
@@ -253,10 +266,11 @@ class Pymata4(threading.Thread):
                     self.shutdown()
                 raise RuntimeError('No Arduino Found or User Aborted Program')
         # this is tcp/ip interface
-        else:
+        elif not bt_sock:
             # with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as self.sock:
             #     s = self.sock.create_connection((self.ip_address, self.ip_port))
             #     print(s)
+            
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.sock.connect((self.ip_address, self.ip_port))
             print(f'Successfully connected to: {self.ip_address}:{self.ip_port}')
@@ -1699,7 +1713,10 @@ class Pymata4(threading.Thread):
                 raise RuntimeError('write fail in _send_command')
             return result
         else:
-            self.sock.sendall(send_message)
+            if self.isBT:
+                self.sock.send(send_message)
+            else:
+                self.sock.sendall(send_message)
 
     def _send_keep_alive(self):
         """

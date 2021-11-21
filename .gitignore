@@ -132,3 +132,10 @@ dmypy.json
 .pyre/
 
 !/html/
+
+# pyvenv
+Lib/
+Include/
+share/
+Scripts/
+pyvenv.cfg
